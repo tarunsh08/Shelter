@@ -5,6 +5,7 @@ import Authrouter from "./routes/auth.route.js";
 import listingRouter from "./routes/listing.route.js";
 import { connectDB } from "./db/db.js";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 dotenv.config();
 
 connectDB();
@@ -12,6 +13,10 @@ const app = express();
 
 app.use(express.json());
 app.use(cookieParser());
+app.use(cors({
+  credentials: true,
+  origin: "*",
+}));
 
 app.get("/test", (req, res) => {
   res.send("Hello World");
