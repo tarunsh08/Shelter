@@ -14,8 +14,10 @@ const app = express();
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
+  origin: 'https://real-estate-ac5w.vercel.app',
   credentials: true,
-  origin: "*",
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.get("/test", (req, res) => {
