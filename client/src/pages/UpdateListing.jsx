@@ -138,7 +138,7 @@ export default function UpdateListing() {
         return setError("Discount price must be lower than regular price");
       setLoading(true);
       setError(false);
-      const res = await fetch(`/api/listing/update/${params.listingId}`, {
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/listing/update/${params.listingId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -163,7 +163,7 @@ export default function UpdateListing() {
   useEffect(() => {
     const fetchListing = async () => {
       const listingId = params.listingId
-      const res = await fetch(`/api/listing/get/${listingId}`)
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/listing/get/${listingId}`)
       const data = await res.json();
       setFormData(data);
       if (data.success === false) {

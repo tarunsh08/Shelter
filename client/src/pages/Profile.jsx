@@ -73,7 +73,7 @@ export default function Profile() {
     e.preventDefault();
     try {
       dispatch(updateUserStart());
-      const res = await fetch(`/api/user/update/${currentUser._id}`, {
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/user/update/${currentUser._id}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -95,10 +95,10 @@ export default function Profile() {
   const handleDeleteUser = async () => {
     try {
       dispatch(deleteUserStart());
-      const res = await fetch(`/api/user/delete/${currentUser._id}`, {
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/user/delete/${currentUser._id}`, {
         method: "DELETE",
       });
-      const data = res.json();
+      const data = await res.json();
       if (data.success === false) {
         dispatch(deleteUserFailure(data.message));
         return;
@@ -112,8 +112,8 @@ export default function Profile() {
   const handleSignOut = async () => {
     try {
       dispatch(signOutUserStart());
-      const res = await fetch("/api/auth/signout");
-      const data = res.json();
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/auth/signout`);
+      const data = await res.json();
       if (data.success === false) {
         dispatch(signOutUserFailure(data.message));
         return;
@@ -126,7 +126,7 @@ export default function Profile() {
 
   const handleShowListing = async () => {
     try {
-      const res = await fetch(`/api/user/listings/${currentUser._id}`);
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/user/listings/${currentUser._id}`);
       const data = await res.json();
       if (data.success === false) {
         setShowListingError(true);
@@ -141,7 +141,7 @@ export default function Profile() {
 
   const handleListingDelete = async (listingId) => {
     try {
-      const res = await fetch(`/api/listing/delete/${listingId}`, {
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/listing/delete/${listingId}`, {
         method: "DELETE",
       });
       const data = await res.json();
