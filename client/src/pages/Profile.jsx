@@ -1,13 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import {
-  getDownloadURL,
-  getStorage,
-  ref,
-  uploadBytesResumable,
-} from "firebase/storage";
-import { app } from "../firebase";
-import {
   updateUserStart,
   updateUserSuccess,
   updateUserFailure,
@@ -20,7 +13,20 @@ import {
 } from "../redux/user/userSlice";
 import { useDispatch } from "react-redux";
 import { Link } from "react-router-dom";
-import { FaPen, FaTrash } from "react-icons/fa";
+import { 
+  FaPen, 
+  FaTrash, 
+  FaSignOutAlt, 
+  FaUserEdit, 
+  FaPlusCircle,
+  FaEye,
+  FaTimes,
+  FaCheckCircle,
+  FaUpload,
+  FaUserCircle
+} from "react-icons/fa";
+import { MdEmail, MdPassword, MdDeleteForever } from "react-icons/md";
+import { RiErrorWarningFill } from "react-icons/ri";
 
 export default function Profile() {
   const { currentUser, loading, error } = useSelector((state) => state.user);
@@ -32,6 +38,8 @@ export default function Profile() {
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [showListingError, setShowListingError] = useState(false);
   const [userListings, setUserLisings] = useState([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
 
   const dispatch = useDispatch();
 
@@ -41,28 +49,71 @@ export default function Profile() {
     }
   }, [file]);
 
-  const handleFileUpload = (file) => {
-    const storage = getStorage(app);
-    const fileName = new Date().getTime() + file.name;
-    const storageRef = ref(storage, fileName);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 400; 
+          const MAX_HEIGHT = 400; 
+          let width = img.width;
+          let height = img.height;
 
-    uploadTask.on(
-      "state_changed",
-      (snapshot) => {
-        const progress =
-          (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setFilePerc(Math.round(progress));
-      },
-      (error) => {
-        setFileError(true);
-      },
-      () => {
-        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) =>
-          setFormData({ ...formData, avatar: downloadURL })
-        );
-      }
-    );
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          resolve(compressedDataUrl);
+        };
+      };
+    });
+  };
+
+  const handleFileUpload = async (file) => {
+    if (!file.type.startsWith('image/')) {
+      setFileError('Please upload an image file');
+      return;
+    }
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      setFileError('Image size should be less than 5MB');
+      return;
+    }
+
+    try {
+      setFilePerc(0);
+      setFileError(false);
+      
+      const compressedImage = await compressImage(file);
+      setFormData(prev => ({
+        ...prev,
+        avatar: compressedImage
+      }));
+      
+      setFilePerc(100);
+    } catch (error) {
+      console.error('Error processing image:', error);
+      setFileError('Failed to process image');
+    }
   };
 
   const handleChange = (e) => {
@@ -78,6 +129,7 @@ export default function Profile() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: 'include',
         body: JSON.stringify(formData),
       });
       const data = await res.json();
@@ -87,6 +139,7 @@ export default function Profile() {
       }
       dispatch(updateUserSuccess(data));
       setUpdateSuccess(true);
+      setTimeout(() => setUpdateSuccess(false), 3000);
     } catch (err) {
       dispatch(updateUserFailure(err.message));
     }
@@ -97,6 +150,7 @@ export default function Profile() {
       dispatch(deleteUserStart());
       const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/user/delete/${currentUser._id}`, {
         method: "DELETE",
+        credentials: 'include'
       });
       const data = await res.json();
       if (data.success === false) {
@@ -112,7 +166,9 @@ export default function Profile() {
   const handleSignOut = async () => {
     try {
       dispatch(signOutUserStart());
-      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/auth/signout`);
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/auth/signout`,  {
+        credentials: 'include'
+      });
       const data = await res.json();
       if (data.success === false) {
         dispatch(signOutUserFailure(data.message));
@@ -126,7 +182,9 @@ export default function Profile() {
 
   const handleShowListing = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/user/listings/${currentUser._id}`);
+      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/user/listings/${currentUser._id}`, {
+        credentials: 'include'
+      });
       const data = await res.json();
       if (data.success === false) {
         setShowListingError(true);
@@ -134,6 +192,7 @@ export default function Profile() {
       }
       setShowListingError(false);
       setUserLisings(data);
+      setActiveTab('listings');
     } catch (err) {
       setShowListingError(true);
     }
@@ -143,6 +202,7 @@ export default function Profile() {
     try {
       const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/api/listing/delete/${listingId}`, {
         method: "DELETE",
+        credentials: 'include'
       });
       const data = await res.json();
       if (data.success === false) {
@@ -150,7 +210,7 @@ export default function Profile() {
         return;
       }
       setUserLisings((prev) =>
-        prev.filter((listing) => listing.id !== listingId)
+        prev.filter((listing) => listing._id !== listingId)
       );
     } catch (err) {
       console.log(err.message);
@@ -158,159 +218,311 @@ export default function Profile() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-3xl font-semibold text-center text-gray-900 mb-8">Profile</h1>
-      <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
-        <div className="flex flex-col items-center">
-          <input
-            onChange={(e) => setFile(e.target.files[0])}
-            type="file"
-            ref={fileRef}
-            hidden
-            accept="image/*"
-          />
-          <img
-            onClick={() => fileRef.current.click()}
-            src={formData?.avatar || currentUser.avatar}
-            alt="Profile"
-            className="rounded-full object-cover h-28 w-28 cursor-pointer border-4 border-gray-100 shadow-sm hover:border-gray-200 transition-all duration-200"
-          />
-          <p className="text-sm mt-3 text-center">
-            {fileError ? (
-              <span className="text-red-600">
-                Error Image upload (image must be less than 2 mb)
-              </span>
-            ) : filePerc > 0 && filePerc < 100 ? (
-              <span className="text-gray-600">{`Uploading ${filePerc}%`}</span>
-            ) : filePerc === 100 ? (
-              <span className="text-green-600">Image successfully uploaded!</span>
-            ) : (
-              ""
-            )}
-          </p>
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">My Profile</h1>
+          <p className="text-gray-600">Manage your account and listings</p>
         </div>
 
-        <div className="space-y-4">
-          <input
-            type="text"
-            placeholder="Username"
-            className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-gray-300 transition-all outline-none"
-            id="username"
-            defaultValue={currentUser.username}
-            onChange={handleChange}
-          />
-          <input
-            type="email"
-            placeholder="Email"
-            className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-gray-300 transition-all outline-none"
-            id="email"
-            defaultValue={currentUser.email}
-            onChange={handleChange}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-300 focus:border-gray-300 transition-all outline-none"
-            id="password"
-            onChange={handleChange}
-          />
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200 mb-8">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`px-6 py-3 font-medium text-sm md:text-base transition-colors ${
+              activeTab === 'profile'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Profile Settings
+          </button>
+          <button
+            onClick={handleShowListing}
+            className={`px-6 py-3 font-medium text-sm md:text-base transition-colors ${
+              activeTab === 'listings'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            My Listings
+          </button>
         </div>
 
-        <button
-          className="w-full bg-gray-800 text-white py-3 rounded-lg font-medium hover:bg-gray-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={loading}
-        >
-          {loading ? "Updating..." : "Update Profile"}
-        </button>
-        
-        <Link
-          to={"/create-listing"}
-          className="bg-gray-700 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-all text-center"
-        >
-          Create Listing
-        </Link>
-      </form>
-
-      <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-100">
-        <button
-          onClick={handleDeleteUser}
-          className="text-gray-600 hover:text-red-600 transition-colors font-medium"
-        >
-          Delete Account
-        </button>
-        <button
-          onClick={handleSignOut}
-          className="text-gray-600 hover:text-red-600 transition-colors font-medium"
-        >
-          Sign Out
-        </button>
-      </div>
-
-      <div className="mt-6 space-y-3">
-        {error && (
-          <p className="text-red-600 bg-red-50 px-4 py-2 rounded-lg text-sm">{error}</p>
-        )}
-        {updateSuccess && (
-          <p className="text-green-600 bg-green-50 px-4 py-2 rounded-lg text-sm">
-            Profile updated successfully
-          </p>
-        )}
-      </div>
-
-      <div className="mt-8">
-        <button
-          onClick={handleShowListing}
-          className="w-full bg-gray-100 text-gray-800 py-3 rounded-lg font-medium hover:bg-gray-200 transition-all border border-gray-200"
-        >
-          Show My Listings
-        </button>
-        
-        {showListingError && (
-          <p className="text-red-600 bg-red-50 px-4 py-2 rounded-lg text-sm mt-3">
-            Error fetching listings
-          </p>
-        )}
-      </div>
-
-      {userListings && userListings.length > 0 && (
-        <div className="mt-8 space-y-4">
-          <h2 className="text-xl font-semibold text-gray-900">Your Listings</h2>
-          {userListings.map((listing) => (
-            <div
-              key={listing._id}
-              className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <Link to={`/listing/${listing._id}`} className="flex items-center gap-4 flex-1">
-                <img
-                  src={listing.imageUrls[0]}
-                  alt="Listing cover"
-                  className="h-16 w-20 object-cover rounded-lg"
+        {/* Profile Tab */}
+        {activeTab === 'profile' && (
+          <div className="bg-white rounded-2xl shadow-sm p-6 md:p-8">
+            <div className="flex flex-col md:flex-row gap-8">
+              {/* Avatar Section */}
+              <div className="flex flex-col items-center md:w-1/3">
+                <div className="relative group">
+                  <img
+                    onClick={() => fileRef.current.click()}
+                    src={formData?.avatar || currentUser.avatar}
+                    alt="Profile"
+                    className="rounded-full object-cover h-32 w-32 cursor-pointer border-4 border-gray-100 shadow-lg hover:border-blue-200 transition-all duration-300 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-full transition-all duration-300 flex items-center justify-center">
+                    <FaUpload className="text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  </div>
+                </div>
+                
+                <input
+                  onChange={(e) => setFile(e.target.files[0])}
+                  type="file"
+                  ref={fileRef}
+                  hidden
+                  accept="image/*"
                 />
-                <p className="text-gray-800 font-medium truncate hover:underline">
-                  {listing.name}
-                </p>
-              </Link>
-              <div className="flex items-center gap-3">
+                
                 <button
-                  onClick={() => handleListingDelete(listing._id)}
-                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  title="Delete listing"
+                  onClick={() => fileRef.current.click()}
+                  className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-2"
                 >
-                  <FaTrash />
+                  <FaUpload className="w-4 h-4" />
+                  Change Photo
                 </button>
-                <Link to={`/update-listing/${listing._id}`}>
+                
+                <div className="mt-4 text-center">
+                  {fileError ? (
+                    <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg">
+                      <RiErrorWarningFill />
+                      {fileError}
+                    </div>
+                  ) : filePerc > 0 && filePerc < 100 ? (
+                    <div className="text-blue-600 text-sm">
+                      <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${filePerc}%` }}
+                        ></div>
+                      </div>
+                      Uploading {filePerc}%
+                    </div>
+                  ) : filePerc === 100 ? (
+                    <div className="flex items-center gap-2 text-green-600 text-sm bg-green-50 px-3 py-2 rounded-lg">
+                      <FaCheckCircle />
+                      Image uploaded successfully!
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Form Section */}
+              <div className="flex-1">
+                <form className="space-y-6" onSubmit={handleSubmit}>
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <FaUserCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        placeholder="Username"
+                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                        id="username"
+                        defaultValue={currentUser.username}
+                        onChange={handleChange}
+                      />
+                    </div>
+
+                    <div className="relative">
+                      <MdEmail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                        id="email"
+                        defaultValue={currentUser.email}
+                        onChange={handleChange}
+                      />
+                    </div>
+
+                    <div className="relative">
+                      <MdPassword className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="password"
+                        placeholder="New Password (leave blank to keep current)"
+                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                        id="password"
+                        onChange={handleChange}
+                      />
+                    </div>
+                  </div>
+
                   <button
-                    className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
-                    title="Edit listing"
+                    className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-medium hover:bg-blue-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    disabled={loading}
                   >
-                    <FaPen />
+                    {loading ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <FaUserEdit className="w-5 h-5" />
+                    )}
+                    {loading ? "Updating..." : "Update Profile"}
                   </button>
-                </Link>
+                </form>
+
+                {/* Status Messages */}
+                <div className="mt-6 space-y-3">
+                  {error && (
+                    <div className="flex items-center gap-2 text-red-600 bg-red-50 px-4 py-3 rounded-xl text-sm">
+                      <RiErrorWarningFill />
+                      {error}
+                    </div>
+                  )}
+                  {updateSuccess && (
+                    <div className="flex items-center gap-2 text-green-600 bg-green-50 px-4 py-3 rounded-xl text-sm">
+                      <FaCheckCircle />
+                      Profile updated successfully!
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="mt-8 pt-6 border-t border-gray-100 space-y-4">
+                  <Link
+                    to={"/create-listing"}
+                    className="flex items-center justify-center gap-2 bg-gray-900 text-white py-3.5 rounded-xl font-medium hover:bg-gray-800 transition-all duration-300"
+                  >
+                    <FaPlusCircle className="w-5 h-5" />
+                    Create New Listing
+                  </Link>
+
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="flex-1 flex items-center justify-center gap-2 text-red-600 border border-red-200 py-3 rounded-xl font-medium hover:bg-red-50 transition-all duration-300"
+                    >
+                      <MdDeleteForever className="w-5 h-5" />
+                      Delete Account
+                    </button>
+                    <button
+                      onClick={handleSignOut}
+                      className="flex-1 flex items-center justify-center gap-2 text-gray-600 border border-gray-200 py-3 rounded-xl font-medium hover:bg-gray-50 transition-all duration-300"
+                    >
+                      <FaSignOutAlt className="w-5 h-5" />
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        )}
+
+        {/* Listings Tab */}
+        {activeTab === 'listings' && (
+          <div className="bg-white rounded-2xl shadow-sm p-6 md:p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">My Listings</h2>
+              <button
+                onClick={handleShowListing}
+                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+              >
+                <FaEye className="w-4 h-4" />
+                Refresh
+              </button>
+            </div>
+
+            {showListingError && (
+              <div className="flex items-center gap-2 text-red-600 bg-red-50 px-4 py-3 rounded-xl text-sm mb-6">
+                <RiErrorWarningFill />
+                Error fetching your listings
+              </div>
+            )}
+
+            {userListings.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <FaPlusCircle className="w-10 h-10 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No listings yet</h3>
+                <p className="text-gray-600 mb-6">Start by creating your first property listing</p>
+                <Link
+                  to={"/create-listing"}
+                  className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <FaPlusCircle className="w-5 h-5" />
+                  Create Listing
+                </Link>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {userListings.map((listing) => (
+                  <div
+                    key={listing._id}
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 hover:shadow-md transition-all duration-300"
+                  >
+                    <Link to={`/listing/${listing._id}`} className="flex items-center gap-4 flex-1 group">
+                      <img
+                        src={listing.imageUrls[0]}
+                        alt="Listing cover"
+                        className="h-16 w-20 object-cover rounded-lg group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-gray-900 font-medium truncate group-hover:text-blue-600 transition-colors">
+                          {listing.name}
+                        </p>
+                        <p className="text-gray-600 text-sm">
+                          ${listing.offer ? listing.discountPrice : listing.regularPrice}
+                          {listing.type === 'rent' && '/month'}
+                        </p>
+                      </div>
+                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link to={`/update-listing/${listing._id}`}>
+                        <button
+                          className="p-3 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all duration-300"
+                          title="Edit listing"
+                        >
+                          <FaPen className="w-4 h-4" />
+                        </button>
+                      </Link>
+                      <button
+                        onClick={() => handleListingDelete(listing._id)}
+                        className="p-3 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-300"
+                        title="Delete listing"
+                      >
+                        <FaTrash className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+              <div className="text-center">
+                <RiErrorWarningFill className="w-16 h-16 text-red-600 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Delete Account</h3>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently removed.
+                </p>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteUser}
+                    className="flex-1 bg-red-600 text-white py-3 rounded-xl font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <MdDeleteForever className="w-5 h-5" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
