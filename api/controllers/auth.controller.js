@@ -7,13 +7,32 @@ dotenv.config();
 
 export const signup = async (req, res, next) => {
   const { username, email, password } = req.body;
-
   const hashedPassword = bcryptjs.hashSync(password, 10);
   const newUser = new User({ username, email, password: hashedPassword });
 
   try {
+    const user = await User.findOne({ email });
+    if (user) return next(errorHandler(400, "User already exists"));
+
     await newUser.save();
-    res.status(201).json("User created successfully");
+    
+    // Generate token
+    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET);
+    
+    // Remove password from the response
+    const { password: pass, ...rest } = newUser._doc;
+
+    // Set cookie and send response
+    res
+      .cookie('access_token', token, { 
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        path: '/',
+      })
+      .status(200)
+      .json(rest);
   } catch (err) {
     next(err);
   }

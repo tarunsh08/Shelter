@@ -1,13 +1,16 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import OAuth from "../components/OAuth";
 import { User, Mail, Lock, ArrowRight, Home } from "lucide-react";
+import { signInSuccess } from "../redux/user/userSlice";
 
 export default function SignUp() {
   const [formData, setFormData] = useState({});
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const handleChange = (e) => {
     setFormData({
@@ -33,11 +36,16 @@ export default function SignUp() {
         }
       );
       const data = await res.json();
+      
       if (data.success === false) {
         setLoading(false);
         setError(data.message);
         return;
       }
+
+      // Update Redux store with user data
+      dispatch(signInSuccess(data));
+      
       setLoading(false);
       setError(null);
       navigate("/");
