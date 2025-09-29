@@ -6,6 +6,8 @@ import listingRouter from "./routes/listing.route.js";
 import { connectDB } from "./db/db.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import corsOptions from "./config/corsOptions.js";
+
 dotenv.config();
 
 connectDB();
@@ -15,40 +17,24 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 
-const allowedOrigins = [
-  'http://localhost:5173',
-  'https://real-estate-ac5w.vercel.app'
-];
+// Use CORS with the imported options
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  exposedHeaders: ['set-cookie'],
-  maxAge: 600
-}));
-
-app.options('*', cors());
-
+// Test route
 app.get("/test", (req, res) => {
   res.send("Hello World");
 });
 
+// Routes
 app.use("/api/user", userRouter);
 app.use("/api/auth", Authrouter);
 app.use("/api/listing", listingRouter);
 
+// Error handling middleware
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
+  const message = err.message || 'Internal Server Error';
   return res.status(statusCode).json({
     success: false,
     statusCode,
@@ -56,6 +42,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(3000, () => {
-  console.log("listening on port 3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });

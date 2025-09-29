@@ -1,21 +1,23 @@
 import jwt from "jsonwebtoken";
 import { errorHandler } from "../utils/error.js";
-import User from "../models/user.model.js";
 
 export const verifyToken = (req, res, next) => {
-    const token = req.cookies.access_token;
-    // console.log(token);
+    const token = req.cookies.access_token; 
+    
     if (!token) {
-        return next(errorHandler(401, 'Unauthorized'));
+        return next(errorHandler(401, 'Unauthorized - No access token provided'));
     }
-    jwt.verify(token, process.env.JWT_SECRET, async (err, user) => {
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
         if (err) {
-            console.log(err.message);
-            return next(errorHandler(403, 'Forbidden'));
+            console.error('Token verification error:', err.message);
+            if (err.name === 'TokenExpiredError') {
+                return next(errorHandler(403, 'Session expired. Please log in again.'));
+            }
+            return next(errorHandler(403, 'Forbidden - Invalid token'));
         }
-        // const temp_user = await User.findById(user.id)
-        // console.log(temp_user.username);
+        
         req.user = user;
         next();
-    })
-}
+    });
+};
